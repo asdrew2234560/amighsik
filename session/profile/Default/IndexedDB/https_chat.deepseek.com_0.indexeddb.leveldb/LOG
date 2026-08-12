@@ -1,0 +1,5 @@
+2026/08/12-11:03:10.476 958 Reusing MANIFEST C:\Users\Amirali\Downloads\Deepseek-API-main\Deepseek-API-main\session\profile\Default\IndexedDB\https_chat.deepseek.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/08/12-11:03:10.477 958 Recovering log #3
+2026/08/12-11:03:10.477 958 Reusing old log C:\Users\Amirali\Downloads\Deepseek-API-main\Deepseek-API-main\session\profile\Default\IndexedDB\https_chat.deepseek.com_0.indexeddb.leveldb/000003.log 
+2026/08/12-11:04:41.980 958 Manual compaction at level-0 from '\x00\x02\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x03\x00\x00\x00' @ 0 : 0; will stop at (end)
+2026/08/12-11:04:42.025 1b24 Manual compaction at level-0 from '\x00\x01\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x02\x00\x00\x00' @ 0 : 0; will stop at (end)
