@@ -45,6 +45,7 @@ from .schemas import ChatCompletionRequest
 
 load_dotenv()
 
+
 app = FastAPI(title="DeepSeek OpenAI-compatible API", version="0.1.0")
 install_rate_limit(app, RateLimiter(limit=RATE_LIMIT_PER_MINUTE, window=60.0))
 
@@ -96,7 +97,53 @@ def list_models():
         ],
     }
 
+from .schemas import ChatMessage, ChatCompletionRequest
+from .config import DEFAULT_MODEL
 
+@app.post("/v1/responses")
+async def responses_proxy(req: dict):
+    """
+    Compatibility shim for clients that POST to /v1/responses.
+    Accepts either OpenAI 'messages' or 'input' (string or list) and
+    forwards to the existing /v1/chat/completions handler.
+    """
+    # Normalize model/flags
+    model = req.get("model", DEFAULT_MODEL)
+    stream = bool(req.get("stream", False))
+    conversation_id = req.get("conversation_id")
+    thinking = bool(req.get("thinking", False))
+    search = bool(req.get("search", False))
+
+    # Accept either messages (OpenAI chat) or input (Responses API)
+    messages = None
+    if "messages" in req and req["messages"]:
+        messages = req["messages"]
+    elif "input" in req and req["input"] is not None:
+        inp = req["input"]
+        if isinstance(inp, list):
+            # join list into one user message
+            content = "\n".join(str(x) for x in inp)
+        else:
+            content = str(inp)
+        messages = [{"role": "user", "content": content}]
+    else:
+        return _error("`messages` or `input` must be provided", status=400, err_type="invalid_request_error")
+
+    # Build a ChatCompletionRequest and forward to the existing handler
+    try:
+        chat_req = ChatCompletionRequest(
+            model=model,
+            messages=messages,
+            stream=stream,
+            conversation_id=conversation_id,
+            thinking=thinking,
+            search=search,
+        )
+    except Exception as e:
+        return _error(f"Invalid request: {e}", status=400, err_type="invalid_request_error")
+
+    # Reuse existing logic
+    return await chat_completions(chat_req)
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest):
     if not req.messages:
