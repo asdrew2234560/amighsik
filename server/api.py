@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import threading
 import time
-
+from fastapi import Request
+from .config import DEFAULT_MODEL
+from .schemas import ChatCompletionRequest
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -97,31 +99,31 @@ def list_models():
         ],
     }
 
-from .schemas import ChatMessage, ChatCompletionRequest
-from .config import DEFAULT_MODEL
 
 @app.post("/v1/responses")
-async def responses_proxy(req: dict):
+async def responses_proxy(request: Request):
     """
-    Compatibility shim for clients that POST to /v1/responses.
-    Accepts either OpenAI 'messages' or 'input' (string or list) and
-    forwards to the existing /v1/chat/completions handler.
+    Compatibility shim for clients calling the newer /v1/responses endpoint.
+    Accepts either `messages` or `input` and forwards to the existing chat_completions handler.
     """
-    # Normalize model/flags
-    model = req.get("model", DEFAULT_MODEL)
-    stream = bool(req.get("stream", False))
-    conversation_id = req.get("conversation_id")
-    thinking = bool(req.get("thinking", False))
-    search = bool(req.get("search", False))
+    try:
+        body = await request.json()
+    except Exception:
+        return _error("Request body must be JSON", status=400, err_type="invalid_request_error")
 
-    # Accept either messages (OpenAI chat) or input (Responses API)
+    model = body.get("model", DEFAULT_MODEL)
+    stream = bool(body.get("stream", False))
+    conversation_id = body.get("conversation_id")
+    thinking = bool(body.get("thinking", False))
+    search = bool(body.get("search", False))
+
+    # Accept either messages (chat API) or input (Responses API)
     messages = None
-    if "messages" in req and req["messages"]:
-        messages = req["messages"]
-    elif "input" in req and req["input"] is not None:
-        inp = req["input"]
+    if body.get("messages"):
+        messages = body["messages"]
+    elif "input" in body and body["input"] is not None:
+        inp = body["input"]
         if isinstance(inp, list):
-            # join list into one user message
             content = "\n".join(str(x) for x in inp)
         else:
             content = str(inp)
@@ -129,7 +131,6 @@ async def responses_proxy(req: dict):
     else:
         return _error("`messages` or `input` must be provided", status=400, err_type="invalid_request_error")
 
-    # Build a ChatCompletionRequest and forward to the existing handler
     try:
         chat_req = ChatCompletionRequest(
             model=model,
@@ -138,12 +139,21 @@ async def responses_proxy(req: dict):
             conversation_id=conversation_id,
             thinking=thinking,
             search=search,
+            temperature=body.get("temperature"),
+            top_p=body.get("top_p"),
+            max_tokens=body.get("max_tokens"),
+            user=body.get("user"),
         )
     except Exception as e:
         return _error(f"Invalid request: {e}", status=400, err_type="invalid_request_error")
 
-    # Reuse existing logic
-    return await chat_completions(chat_req)
+    try:
+        return await chat_completions(chat_req)
+    except Exception as e:
+        # Print traceback to server logs for debugging (stdout/stderr)
+        import traceback
+        traceback.print_exc()
+        return _error(f"Responses proxy failed: {e}")
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest):
     if not req.messages:
