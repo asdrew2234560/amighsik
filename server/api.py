@@ -24,6 +24,7 @@ from __future__ import annotations
 import threading
 import time
 from fastapi import Request
+from fastapi.middleware.cors import CORSMiddleware  # <-- اضافه شد
 from .config import DEFAULT_MODEL
 from .schemas import ChatCompletionRequest
 from dotenv import load_dotenv
@@ -49,6 +50,21 @@ load_dotenv()
 
 
 app = FastAPI(title="DeepSeek OpenAI-compatible API", version="0.1.0")
+
+# ===================== CORS MIDDLEWARE =====================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://m.mruclml.ir",
+        "https://mruclml.ir",
+        "https://round-dust-7dbf.abdolghasems.workers.dev",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+# ===========================================================
+
 install_rate_limit(app, RateLimiter(limit=RATE_LIMIT_PER_MINUTE, window=60.0))
 
 # One shared client (and its signed-in session) built lazily on first use.
@@ -154,6 +170,8 @@ async def responses_proxy(request: Request):
         import traceback
         traceback.print_exc()
         return _error(f"Responses proxy failed: {e}")
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest):
     if not req.messages:
